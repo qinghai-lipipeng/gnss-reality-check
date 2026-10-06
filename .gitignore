@@ -1,0 +1,28 @@
+# Gradle / Android 构建产物
+build/
+.gradle/
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+local.properties
+
+# 构建缓存与 IDE
+.cxx/
+*.iml
+.idea/
+.externalNativeBuild/
+captures/
+output.json
+
+# 日志与临时文件
+*.log
+.DS_Store
+Thumbs.db
+
+# 密钥类文件(万一有人不小心放进来)
+/*.keystore
+/*.jks
+secrets.properties
+.env
