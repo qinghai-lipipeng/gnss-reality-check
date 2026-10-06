@@ -276,9 +276,18 @@ fun LiveResultBar(
     }
 }
 
-/** 误差分档配色:<1 m 绿,<5 m 琥珀,再大偏红 */
-fun errorColor(m: Double): Color = when {
-    !m.isFinite() -> TextMuted
+/**
+ * 误差分档配色:<1 m 绿,<5 m 琥珀,再大偏红。
+ *
+ * 参数刻意声明成 **Double?** 而不是 Double:解不出位置时传 `null`,不能传 0.0。
+ * 0.0 会被 min/max 当成一个"误差恰好为零"的真实数据点 ——
+ * 于是室内、桥下这种一颗星都收不到的场景被染成**绿色**,
+ * 第 09 关还会拿它判"达标"并弹出「过了。」。激励方向直接是反的。
+ *
+ * 传 Double 的旧调用点不受影响:Kotlin 会隐式装箱,不用逐个改。
+ */
+fun errorColor(m: Double?): Color = when {
+    m == null || !m.isFinite() -> TextMuted      // 解不出 / 非有限值:中性灰,绝不判绿
     m <= 1.0 -> AccentGreen
     m <= 5.0 -> AccentWarm
     else -> Danger

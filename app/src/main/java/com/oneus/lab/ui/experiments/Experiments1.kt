@@ -26,83 +26,16 @@ import com.oneus.lab.ui.theme.*
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** 每个实验页的通用外壳 */
-@Composable
-fun ExpScaffold(
-    index: String,
-    title: String,
-    depth: Depth,
-    onDepth: (Depth) -> Unit,
-    /** 常驻区:钉在滚动区之外,调参时始终可见。不用时留空。 */
-    sticky: @Composable (ColumnScope.() -> Unit)? = null,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(Modifier.fillMaxSize()) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(top = 12.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(index, style = mono13(), color = Accent)
-                Spacer(Modifier.width(10.dp))
-                Text(
-                    title,
-                    style = title18(),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-            }
-            Spacer(Modifier.height(10.dp))
-            DepthSwitch(depth, onDepth)
-            Spacer(Modifier.height(4.dp))
-            Text(depth.hint, style = mono10())
-        }
-        if (sticky != null) {
-            Spacer(Modifier.height(10.dp))
-            sticky()
-        }
-        Column(
-            Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(top = 16.dp, bottom = 48.dp)
-        ) { content() }
-    }
-}
-
-/** 结论条:每层结尾一句话,可复述 */
-@Composable
-fun Takeaway(text: String, color: Color = Accent) {
-    Surface(
-        shape = RoundedCornerShape(14.dp),
-        color = color.copy(alpha = 0.12f),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(Modifier.padding(16.dp)) {
-            Box(
-                Modifier
-                    .width(3.dp)
-                    .heightIn(min = 20.dp)
-                    .fillMaxHeight()
-                    .background(color, RoundedCornerShape(2.dp))
-            )
-            Spacer(Modifier.width(12.dp))
-            Text(text, style = body14(), color = TextPrimary)
-        }
-    }
-}
+// ExpScaffold / Takeaway 已经抽到 ExpShell.kt —— 页面框架不属于第一节的正文。
 
 // ══════════════════════════════════════════
 // 实验 0 · 开场:量 / 算 / 猜
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp00_Opening(depth: Depth, onDepth: (Depth) -> Unit, onGo: (Int) -> Unit) {
-    ExpScaffold("00", "卫星只负责「量」", depth, onDepth) {
+fun Exp00_Opening(env: SectionEnv) {
+    val depth = env.depth
+    ExpScaffold(env, "卫星只负责「量」") {
         LayeredText(
             Layered(
                 shallow = "定位不是「算」出来的,是「量」出来的。\n\n" +
@@ -144,7 +77,7 @@ fun Exp00_Opening(depth: Depth, onDepth: (Depth) -> Unit, onGo: (Int) -> Unit) {
                     style = body13()
                 )
                 Spacer(Modifier.height(12.dp))
-                SmallBtn("开始 →", Accent) { onGo(1) }
+                SmallBtn("开始 →", Accent) { env.onGo(1) }
             }
         }
 
@@ -232,13 +165,14 @@ fun SmallBtn(text: String, accent: Color = Accent, onClick: () -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp01_Clock(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp01_Clock(env: SectionEnv) {
+    val depth = env.depth
     var satNs by remember { mutableFloatStateOf(20f) }
     var bet by remember { mutableStateOf<Int?>(null) }
     val rows = remember { LabEngine.clockSweep(Scenarios.OPEN) }
     val meters = satNs.toDouble() * 0.299792458
 
-    ExpScaffold("01", "光速尺", depth, onDepth) {
+    ExpScaffold(env, "光速尺") {
         LayeredText(
             Layered(
                 shallow = "卫星不说「你离我一公里」,它说的是「我的信号到你那里,花了 3.33 微秒」。芯片把时间换算成距离。\n\n" +
@@ -321,7 +255,8 @@ fun Exp01_Clock(depth: Depth, onDepth: (Depth) -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp02_Geometry(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp02_Geometry(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("open") }
     var count by remember { mutableIntStateOf(4) }
     val sc = Scenarios.byId(scenarioId)
@@ -331,13 +266,18 @@ fun Exp02_Geometry(depth: Depth, onDepth: (Depth) -> Unit) {
         LabEngine.shot(sc, GnssSystem.entries.toSet(), cleanBudget(), maxSats = count)
     }
 
-    ExpScaffold("02", "四颗星和几何", depth, onDepth,
+    ExpScaffold(env, "四颗星和几何",
         sticky = {
             LiveResultBar(
                 listOf(
                     StatData("可见星", "${shot.numSats}"),
-                    StatData("HDOP", if (shot.solution == null) "—" else LabEngine.fmtNum(shot.solution.hdop)),
-                    StatData("水平误差", "${LabEngine.fmtNum(shot.errorM)} m", errorColor(shot.errorM))
+                    StatData("HDOP", shot.solution?.let { LabEngine.fmtNum(it.hdop) } ?: "—"),
+                    // 解不出来时显示「信号不足」,绝不能拿 0.0 判成绿色"零误差"
+                    StatData(
+                        "水平误差",
+                        shot.horizontalError?.let { "${LabEngine.fmtNum(it)} m" } ?: "信号不足",
+                        errorColor(shot.horizontalError)
+                    )
                 )
             )
         }

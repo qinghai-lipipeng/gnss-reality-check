@@ -16,6 +16,33 @@ data class ShotResult(
     val numSats: Int get() = obs.size
     val ok: Boolean get() = solution != null && solution.ok
     fun satsOf(sys: GnssSystem) = obs.filter { it.system == sys }
+
+    /**
+     * 水平误差(距真值,m)。**解不出来时必须是 null。**
+     *
+     * UI 一律走这个属性,不要用 [errorM]:后者在无解时被 [shot] 吞成了 0.0,
+     * 而 0.0 是一个"误差恰好为零"的合法数值,会被配色判成绿色、被 `passed` 判成达标。
+     * 「没有解」和「解得非常好」在业务上必须能被区分开,类型上就得能区分。
+     */
+    val horizontalError: Double? get() = solution?.horizontalError(truthEcef)
+
+    /** 同上,垂直分量。 */
+    val verticalError: Double? get() = solution?.verticalError(truthEcef)
+
+    /**
+     * 挑战判定:**必须先有解**,而且解本身要可信([Solution.ok])。
+     *
+     * 曾经写成界面里的 `shot.errorM <= target`。桥下 / 室内一颗星都收不到,
+     * errorM 是被吞出来的 0.0,于是 `0.0 <= target` 成立 —— 一个必然失败的场景被判达标,
+     * 界面弹出「过了。」。用户选最难的那个,反而通关了。
+     *
+     * 规则收在这里只有一份,界面与测试共用,不会再各算各的。
+     */
+    fun passes(targetM: Double): Boolean {
+        val s = solution ?: return false
+        if (!s.ok) return false
+        return s.horizontalError(truthEcef) <= targetM
+    }
 }
 
 /** 表格里的一行。na = 数据不可得(例如可见卫星不足 4 颗,根本没有解) */
@@ -82,6 +109,9 @@ object LabEngine {
         val truth = scenario.site.toEcef()
         return ShotResult(
             scenario = scenario, obs = obs, solution = sol,
+            // 注意:这两个字段在无解时是 0.0,那是**历史遗留**,不是"误差为零"。
+            // 引擎内部的表格/统计(Row、avgError)只喂有解的场景,不受影响;
+            // 凡是会显示给用户的地方一律用 ShotResult.horizontalError / verticalError,它们是 null。
             errorM = sol?.horizontalError(truth) ?: 0.0,
             truthEcef = truth,
             verticalErrorM = sol?.verticalError(truth) ?: 0.0

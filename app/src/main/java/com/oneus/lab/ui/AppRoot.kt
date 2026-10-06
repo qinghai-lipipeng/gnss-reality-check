@@ -87,6 +87,21 @@ fun AppRoot() {
     fun go(i: Int) { current = i }
     fun home() { current = -1 }
 
+    // 一节所处的全部环境,在这里**只构造一次**。
+    // 以前 depth / tech / onGo / onHome 是几个平行参数分别往下穿,穿到 ScreenBody 就断了 ——
+    // 「术语」开关就是这么变成死控件的:首页画了它,可没有任何一条参数路径能把它递进某一节。
+    val env = SectionEnv(
+        current = current,
+        total = entries.size,
+        code = entries.getOrNull(current)?.index ?: "",
+        depth = depth,
+        tech = tech,
+        onDepth = { depthName = it.name },
+        onTech = { tech = it },
+        onGo = { go(it) },
+        onHome = { home() }
+    )
+
     // 系统返回手势/按键:在节内一律回首页(与左上角返回一致);
     // 在首页时 enabled = false,交还给系统去退出应用 —— 「侧滑直接退出」的根因修复仍然成立。
     BackHandler(enabled = inSection) { home() }
@@ -107,9 +122,9 @@ fun AppRoot() {
                                         maxLines = 1, overflow = TextOverflow.Ellipsis,
                                         style = MaterialTheme.typography.titleMedium
                                     )
-                                    // 节号就是 current 本身,没有第二个来源
+                                    // 节号就是 env.current 本身,没有第二个来源
                                     Text(
-                                        "第 ${current + 1} / ${entries.size} 节",
+                                        env.ordinalLabel,
                                         style = mono10()
                                     )
                                 }
@@ -130,8 +145,8 @@ fun AppRoot() {
                             )
                         )
                         LinearProgressIndicator(
-                            // 0..(total-1) 映射到 0f..1f;第一节 0f,末节 1f
-                            progress = { current / (entries.size - 1f) },
+                            // 0..(total-1) 映射到 0f..1f;第一节 0f,末节 1f。越界在 env 里钳过了。
+                            progress = { env.progress },
                             modifier = Modifier.fillMaxWidth().height(2.dp),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceContainerHigh,
@@ -157,7 +172,7 @@ fun AppRoot() {
                 if (!inSection) {
                     Home(depth, { depthName = it.name }, tech, { tech = it }, ::go)
                 } else {
-                    ScreenBody(current, depth, { depthName = it.name }, ::go, ::home)
+                    ScreenBody(env)
                 }
             }
         }
@@ -176,28 +191,26 @@ fun AppRoot() {
 
 /**
  * 把节号分发到具体页面。
- * @param current 当前**节号**(0..entries.size-1),全局唯一的状态源
+ *
+ * 每个页面只收一个 [SectionEnv]:它要什么就从 env 上拿,
+ * 路由不再负责把 depth / tech / onGo 一路拆开往下递。
+ *
+ * @param env 当前这一节的全部环境;节号是 env.current,全局唯一的状态源
  */
 @Composable
-private fun ScreenBody(
-    current: Int,
-    depth: Depth,
-    onDepth: (Depth) -> Unit,
-    onGo: (Int) -> Unit,
-    onHome: () -> Unit
-) {
-    when (current) {
-        0 -> Exp00_Opening(depth, onDepth) { onGo(1) }
-        1 -> Exp01_Clock(depth, onDepth)
-        2 -> Exp02_Geometry(depth, onDepth)
-        3 -> Exp03_Constellation(depth, onDepth)
-        4 -> Exp04_MoreStuff(depth, onDepth)
-        5 -> Exp05_Hybrid(depth, onDepth)
-        6 -> Exp06_Filters(depth, onDepth)
-        7 -> Exp07_Precision(depth, onDepth)
-        8 -> Exp08_Sandbox(depth, onDepth)
-        9 -> Exp09_Challenge(depth, onDepth)
-        10 -> Closing(depth, onDepth, onHome)
+private fun ScreenBody(env: SectionEnv) {
+    when (env.current) {
+        0 -> Exp00_Opening(env)
+        1 -> Exp01_Clock(env)
+        2 -> Exp02_Geometry(env)
+        3 -> Exp03_Constellation(env)
+        4 -> Exp04_MoreStuff(env)
+        5 -> Exp05_Hybrid(env)
+        6 -> Exp06_Filters(env)
+        7 -> Exp07_Precision(env)
+        8 -> Exp08_Sandbox(env)
+        9 -> Exp09_Challenge(env)
+        10 -> Closing(env)
         // 不写 else:current 是受控状态,一旦出现越界值宁可什么都不渲染,
         // 也不要静默掉进收尾页 —— 静默兜底会把 bug 藏起来。
         else -> Unit

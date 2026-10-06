@@ -24,7 +24,8 @@ import kotlin.math.abs
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp03_Constellation(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp03_Constellation(env: SectionEnv) {
+    val depth = env.depth
     // 默认开阔地:四个系统都解得出来,"同一量级"这个结论才能在表里直接看见。
     // 切到城市/峡谷会看到数字跳动 —— 那不是换星座变差了,是单次采样的噪声,
     // 所以下面那张表是 9 次采样平均的结果。
@@ -41,7 +42,7 @@ fun Exp03_Constellation(depth: Depth, onDepth: (Depth) -> Unit) {
     }
     val rows = remember(scenarioId, useClock) { LabEngine.constellationSweep(sc, budget) }
 
-    ExpScaffold("03", "星座之争", depth, onDepth) {
+    ExpScaffold(env, "星座之争") {
         LayeredText(
             Layered(
                 shallow = "北斗、GPS、伽利略不是三个软件在比谁聪明。它们就是三群卫星,在天上一起喊「我在哪、现在几点」。\n\n" +
@@ -137,15 +138,16 @@ fun Exp03_Constellation(depth: Depth, onDepth: (Depth) -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp04_MoreStuff(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp04_MoreStuff(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("city") }
-    var tecFrac by remember { mutableFloatStateOf(1.0f) }
+    val tecFrac by remember { mutableFloatStateOf(1.0f) }
     val sc = Scenarios.byId(scenarioId)
     val tec = Scenarios.CITY.tec * tecFrac.toDouble()
     val rows = remember(scenarioId, tecFrac) { LabEngine.ionoSweep(sc, tec) }
     val rel = remember { LabEngine.relativityContrast(Scenarios.OPEN) }
 
-    ExpScaffold("04", "多给了你料", depth, onDepth) {
+    ExpScaffold(env, "多给了你料") {
         LayeredText(
             Layered(
                 shallow = "北斗强在哪?\n\n" +
@@ -215,14 +217,15 @@ fun Exp04_MoreStuff(depth: Depth, onDepth: (Depth) -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp05_Hybrid(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp05_Hybrid(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("city") }
     val sc = Scenarios.byId(scenarioId)
     val city = remember(scenarioId) { LabEngine.hybridSweep(sc) }
     val bridge = remember { LabEngine.hybridUnderBridge() }
     var bet by remember { mutableStateOf<Int?>(null) }
 
-    ExpScaffold("05", "城市蓝点的真相", depth, onDepth) {
+    ExpScaffold(env, "城市蓝点的真相") {
         LayeredText(
             Layered(
                 shallow = "为什么有的准,有的不准?\n\n" +
@@ -286,7 +289,8 @@ fun Exp05_Hybrid(depth: Depth, onDepth: (Depth) -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp06_Filters(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp06_Filters(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("open") }
 
     // 拖动中的临时值:只驱动读数显示,不触发重算
@@ -306,7 +310,10 @@ fun Exp06_Filters(depth: Depth, onDepth: (Depth) -> Unit) {
         busy = true
         traces = withContext(Dispatchers.Default) {
             val b = ErrorBudget(
-                receiverClockNs = committedNs.toDouble(),
+                // 标签写的是「卫星间钟差」,注入的就必须是**卫星之间**那部分。
+                // 这里原来注入的是 receiverClockNs —— 第 01 节花整节说明会被完全吸收的共模量,
+                // 于是这个滑块是一条纹丝不动的平线:拖到 0 / 50 / 200 ns 都是 1.158 m。
+                satClockErrorM = committedNs.toDouble() * 0.299792458,
                 ionoHandling = IonoHandling.TEC_MODEL
             )
             // 800 粒子:曲线形状与 1000 肉眼无差别,耗时少三成
@@ -318,7 +325,7 @@ fun Exp06_Filters(depth: Depth, onDepth: (Depth) -> Unit) {
     val spread = if (traces.isEmpty()) 0.0
     else traces.maxOf { it.finalError } - traces.minOf { it.finalError }
 
-    ExpScaffold("06", "滤波器之争", depth, onDepth,
+    ExpScaffold(env, "滤波器之争",
         sticky = {
             // 常驻:四条曲线的终值与抖动,调滑块时始终可见
             LiveResultBar(
@@ -378,7 +385,7 @@ fun Exp06_Filters(depth: Depth, onDepth: (Depth) -> Unit) {
         Spacer(Modifier.height(4.dp))
         Card {
             HeavySlider(
-                label = "卫星间钟差",
+                label = env.term("卫星间钟差", "卫星间钟差 c·δt_sat"),
                 valueText = LabEngine.fmtNs(dragNs.toDouble()),
                 value = dragNs,
                 range = 0f..200f,

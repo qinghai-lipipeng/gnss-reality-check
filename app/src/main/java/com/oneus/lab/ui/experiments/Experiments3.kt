@@ -25,7 +25,8 @@ import kotlin.math.roundToInt
 // ══════════════════════════════════════════
 
 @Composable
-fun Exp07_Precision(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp07_Precision(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("city") }
     val sc = Scenarios.byId(scenarioId)
     val rows = remember(scenarioId) { LabEngine.precisionSweep(sc) }
@@ -35,7 +36,7 @@ fun Exp07_Precision(depth: Depth, onDepth: (Depth) -> Unit) {
             .let { if (it.isEmpty()) 0.0 else it.average() }, 0.0))
     }
 
-    ExpScaffold("07", "差分与 PPP", depth, onDepth) {
+    ExpScaffold(env, "差分与 PPP") {
         LayeredText(
             Layered(
                 shallow = "差分和 PPP 能到厘米级。但它们不是把数学换掉了。\n\n" +
@@ -121,7 +122,8 @@ private val presets = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun Exp08_Sandbox(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp08_Sandbox(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("city") }
     var clockNs by remember { mutableFloatStateOf(0f) }
     var satClock by remember { mutableFloatStateOf(1f) }
@@ -150,7 +152,7 @@ fun Exp08_Sandbox(depth: Depth, onDepth: (Depth) -> Unit) {
     }
     val shot = remember(scenarioId, budget, systems) { LabEngine.shot(sc, systems, budget) }
 
-    ExpScaffold("08", "自由沙盒", depth, onDepth,
+    ExpScaffold(env, "自由沙盒",
         sticky = {
             // 常驻可视化面板:收起态是数字条,展开态是天空图。
             // 整块钉在滚动区之外 —— 拖滑块时数字一直在视野顶部,
@@ -159,7 +161,12 @@ fun Exp08_Sandbox(depth: Depth, onDepth: (Depth) -> Unit) {
                 open = panelOpen,
                 onToggleOpen = { panelOpen = !panelOpen },
                 collapsed = listOf(
-                    StatData("水平误差", "${LabEngine.fmtNum(shot.errorM)} m", errorColor(shot.errorM)),
+                    // 解不出位置时走「信号不足」+ 中性灰,不再显示绿色的 0.0000 m
+                    StatData(
+                        "水平误差",
+                        shot.horizontalError?.let { "${LabEngine.fmtNum(it)} m" } ?: "信号不足",
+                        errorColor(shot.horizontalError)
+                    ),
                     StatData("可见星", "${shot.numSats}"),
                     StatData("HDOP", shot.solution?.let { LabEngine.fmtNum(it.hdop) } ?: "—")
                 ),
@@ -380,7 +387,8 @@ private val challenges = listOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun Exp09_Challenge(depth: Depth, onDepth: (Depth) -> Unit) {
+fun Exp09_Challenge(env: SectionEnv) {
+    val depth = env.depth
     var idx by remember { mutableIntStateOf(0) }
     val ch = challenges[idx]
     var clockNs by remember(idx) { mutableFloatStateOf(0f) }
@@ -403,16 +411,27 @@ fun Exp09_Challenge(depth: Depth, onDepth: (Depth) -> Unit) {
         )
     }
     val shot = remember(scen, budget) { LabEngine.shot(scen, GnssSystem.entries.toSet(), budget) }
-    val passed = shot.errorM <= ch.target
+    // 「没有解」不是「误差为零」。
+    // 这里原来写的是 `shot.errorM <= ch.target`,而 errorM 是解不出来时被吞成的 0.0 ——
+    // 于是一颗星都收不到的峡谷场景被判成达标,弹出「过了。」:用户挑了最不可能过的场景,反而通关。
+    // 判定收进 [ShotResult.passes],规则只有一处。
+    val passed = shot.passes(ch.target)
 
-    ExpScaffold("09", "通关挑战", depth, onDepth,
+    ExpScaffold(env, "通关挑战",
         sticky = {
             LiveResultBar(
                 listOf(
                     StatData("目标", "≤ ${LabEngine.fmtNum(ch.target)} m", Good),
-                    StatData("当前", "${LabEngine.fmtNum(shot.errorM)} m", errorColor(shot.errorM)),
-                    StatData("状态", if (passed) "达标" else "未达标",
-                        if (passed) AccentGreen else TextMuted)
+                    StatData(
+                        "当前",
+                        shot.horizontalError?.let { "${LabEngine.fmtNum(it)} m" } ?: "信号不足",
+                        errorColor(shot.horizontalError)
+                    ),
+                    StatData(
+                        "状态",
+                        if (shot.solution == null) "信号不足" else if (passed) "达标" else "未达标",
+                        if (passed) AccentGreen else TextMuted
+                    )
                 )
             )
         }
@@ -485,12 +504,13 @@ fun Exp09_Challenge(depth: Depth, onDepth: (Depth) -> Unit) {
 // ══════════════════════════════════════════
 
 @Composable
-fun Closing(depth: Depth, onDepth: (Depth) -> Unit, onRestart: () -> Unit) {
+fun Closing(env: SectionEnv) {
+    val depth = env.depth
     var scenarioId by remember { mutableStateOf("city") }
     val sc = Scenarios.byId(scenarioId)
     val lines = remember(scenarioId) { LabEngine.budgetBreakdown(sc) }
 
-    ExpScaffold("★", "一张图收尾", depth, onDepth) {
+    ExpScaffold(env, "一张图收尾") {
         LayeredText(
             Layered(
                 shallow = "回到最开始那句话。\n\n" +
@@ -570,7 +590,7 @@ fun Closing(depth: Depth, onDepth: (Depth) -> Unit, onRestart: () -> Unit) {
             }
         }
         Spacer(Modifier.height(20.dp))
-        SmallBtn("从头再看一遍", Accent, onRestart)
+        SmallBtn("从头再看一遍", Accent, env.onHome)
     }
 }
 
