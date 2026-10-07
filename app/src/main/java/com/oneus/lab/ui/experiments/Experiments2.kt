@@ -29,9 +29,9 @@ fun Exp03_Constellation(env: SectionEnv) {
     // 默认开阔地:四个系统都解得出来,"同一量级"这个结论才能在表里直接看见。
     // 切到城市/峡谷会看到数字跳动 —— 那不是换星座变差了,是单次采样的噪声,
     // 所以下面那张表是 9 次采样平均的结果。
-    var scenarioId by remember { mutableStateOf("open") }
-    var useClock by remember { mutableStateOf(false) }   // true = 注入卫星间钟差不一致
-    var bet by remember { mutableStateOf<Int?>(null) }
+    var scenarioId by env.state("scenarioId") { "open" }
+    var useClock by env.state("useClock") { false }   // true = 注入卫星间钟差不一致
+    var bet by env.state<Int?>("bet") { null }
     val sc = Scenarios.byId(scenarioId)
 
     val budget = remember(useClock) {
@@ -140,8 +140,8 @@ fun Exp03_Constellation(env: SectionEnv) {
 @Composable
 fun Exp04_MoreStuff(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("city") }
-    val tecFrac by remember { mutableFloatStateOf(1.0f) }
+    var scenarioId by env.state("scenarioId") { "city" }
+    val tecFrac by env.state("tecFrac") { 1.0f }
     val sc = Scenarios.byId(scenarioId)
     val tec = Scenarios.CITY.tec * tecFrac.toDouble()
     val rows = remember(scenarioId, tecFrac) { LabEngine.ionoSweep(sc, tec) }
@@ -219,11 +219,11 @@ fun Exp04_MoreStuff(env: SectionEnv) {
 @Composable
 fun Exp05_Hybrid(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("city") }
+    var scenarioId by env.state("scenarioId") { "city" }
     val sc = Scenarios.byId(scenarioId)
     val city = remember(scenarioId) { LabEngine.hybridSweep(sc) }
     val bridge = remember { LabEngine.hybridUnderBridge() }
-    var bet by remember { mutableStateOf<Int?>(null) }
+    var bet by env.state<Int?>("bet") { null }
 
     ExpScaffold(env, "城市蓝点的真相") {
         LayeredText(
@@ -291,21 +291,21 @@ fun Exp05_Hybrid(env: SectionEnv) {
 @Composable
 fun Exp06_Filters(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("open") }
+    var scenarioId by env.state("scenarioId") { "open" }
 
     // 拖动中的临时值:只驱动读数显示,不触发重算
-    var dragNs by remember { mutableFloatStateOf(0f) }
+    var dragNs by env.state("dragNs") { 0f }
     // 已提交的值:只有它变化才重算
-    var committedNs by remember { mutableFloatStateOf(0f) }
-    var busy by remember { mutableStateOf(false) }
-    var bet by remember { mutableStateOf<Int?>(null) }
+    var committedNs by env.state("committedNs") { 0f }
+    var busy by env.state("busy") { false }
+    var bet by env.state<Int?>("bet") { null }
 
     val sc = Scenarios.byId(scenarioId)
     val traceKey = "$scenarioId-$committedNs"
 
     // 重算放在后台线程,并用 traceKey 丢弃过期结果。
     // 之前这里是 remember { filterRun(...) },主线程同步跑近 1 秒 —— 滑动必然卡。
-    var traces by remember { mutableStateOf<List<FilterTrace>>(emptyList()) }
+    var traces by env.state("traces") { emptyList<FilterTrace>() }
     LaunchedEffect(traceKey) {
         busy = true
         traces = withContext(Dispatchers.Default) {

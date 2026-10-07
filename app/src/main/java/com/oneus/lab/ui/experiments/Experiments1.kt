@@ -167,8 +167,9 @@ fun SmallBtn(text: String, accent: Color = Accent, onClick: () -> Unit) {
 @Composable
 fun Exp01_Clock(env: SectionEnv) {
     val depth = env.depth
-    var satNs by remember { mutableFloatStateOf(20f) }
-    var bet by remember { mutableStateOf<Int?>(null) }
+    // 状态归 SectionStore 按节号持有,不是归组合:横跳到别的节再跳回来,这两项还在。
+    var satNs by env.state("satNs") { 20f }
+    var bet by env.state<Int?>("bet") { null }
     val rows = remember { LabEngine.clockSweep(Scenarios.OPEN) }
     val meters = satNs.toDouble() * 0.299792458
 
@@ -257,8 +258,8 @@ fun Exp01_Clock(env: SectionEnv) {
 @Composable
 fun Exp02_Geometry(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("open") }
-    var count by remember { mutableIntStateOf(4) }
+    var scenarioId by env.state("scenarioId") { "open" }
+    var count by env.state("count") { 4 }
     val sc = Scenarios.byId(scenarioId)
     val rows = remember(scenarioId) { LabEngine.geometrySweep(sc) }
     val cur = rows.firstOrNull { it.label.startsWith("$count") }

@@ -2,6 +2,7 @@ package com.oneus.lab
 
 import com.oneus.lab.ui.charts.Depth
 import com.oneus.lab.ui.experiments.SectionEnv
+import com.oneus.lab.ui.experiments.SectionStore
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -21,13 +22,16 @@ class SectionEnvTest {
     private fun env(
         current: Int,
         total: Int = TOTAL,
-        tech: Boolean = false
+        tech: Boolean = false,
+        store: SectionStore = SectionStore(),
+        code: String = "00"
     ) = SectionEnv(
         current = current,
         total = total,
-        code = "00",
+        code = code,
         depth = Depth.SHALLOW,
         tech = tech,
+        store = store,
         onDepth = {},
         onTech = {},
         onGo = {},
@@ -81,6 +85,7 @@ class SectionEnvTest {
         var tech: Boolean? = null
         val e = SectionEnv(
             current = 3, total = TOTAL, code = "03", depth = Depth.MEDIUM, tech = false,
+            store = SectionStore(),
             onDepth = { depth = it },
             onTech = { tech = it },
             onGo = { picked = it },
@@ -91,5 +96,76 @@ class SectionEnvTest {
         assertTrue(home)
         assertEquals(Depth.DEEP, depth)
         assertEquals(true, tech)
+    }
+
+    // ——————————————————————————————————————————————
+    // 状态槽:横跳不丢参数
+    // ——————————————————————————————————————————————
+
+    @Test
+    fun `同一节同一个键返回同一个槽`() {
+        val s = SectionStore()
+        var built = 0
+        val a = s.state("k") { built++; "v" }
+        val b = s.state("k") { built++; "v" }
+        assertSame("同一个键必须是同一个槽", a, b)
+        assertEquals("init 只能跑一次", 1, built)
+    }
+
+    @Test
+    fun `槽里的值会被后续读取看到`() {
+        val s = SectionStore()
+        s.state("k") { 0 }.value = 42
+        assertEquals(42, s.state("k") { 0 }.value)
+    }
+
+    @Test
+    fun `不同节用同一个键名也不会串`() {
+        // 这正是原来「离开一节参数全归零」的另一面:归零丢的是自己的状态,
+        // 共享则会互相污染。两个方向都得锁住。
+        val s = SectionStore()
+        val e2 = env(2, store = s, code = "02")
+        val e8 = env(8, store = s, code = "08")
+        e2.state("scenarioId") { "open" }.value = "canyon"
+        assertEquals("canyon", e2.state("scenarioId") { "open" }.value)
+        assertEquals("第 08 节必须拿到自己的默认值", "city", e8.state("scenarioId") { "city" }.value)
+    }
+
+    @Test
+    fun `横跳到别的节再回来_参数还在`() {
+        val s = SectionStore()
+        val e6 = env(6, store = s, code = "06")
+        val e3 = env(3, store = s, code = "03")
+        // 在第 06 节调参
+        e6.state("scenarioId") { "open" }.value = "city"
+        e6.state("clockNs") { 0f }.value = 137f
+        // 切到第 03 节(模拟页面离开组合),槽不受影响
+        e3.state("scenarioId") { "open" }.value = "canyon"
+        // 回到第 06 节
+        assertEquals("city", e6.state("scenarioId") { "open" }.value)
+        assertEquals(137f, e6.state("clockNs") { 0f }.value, 1e-6f)
+        assertEquals("第 03 节自己的值也没被动", "canyon", e3.state("scenarioId") { "open" }.value)
+    }
+
+    @Test
+    fun `键名带上下文时相当于换一组新槽`() {
+        // 第 09 挑战页原来用 remember(idx):换关卡重置参数。
+        // 把 idx 拼进键名就能保住这条语义,同时 idx 自己还能跨节存活。
+        val s = SectionStore()
+        val e = env(9, store = s, code = "09")
+        e.state("knob/0/clockNs") { 0f }.value = 10f
+        e.state("knob/1/clockNs") { 0f }.value = 20f
+        assertEquals(10f, e.state("knob/0/clockNs") { 0f }.value, 1e-6f)
+        assertEquals(20f, e.state("knob/1/clockNs") { 0f }.value, 1e-6f)
+    }
+
+    @Test
+    fun `空列表之类的可变默认值不会被复用共享`() {
+        // init 每个新键各跑一次,所以不会有两个槽拿到同一个 List 实例。
+        val s = SectionStore()
+        val a = s.state("a") { mutableListOf<String>() }
+        val b = s.state("b") { mutableListOf<String>() }
+        a.value.add("x")
+        assertTrue(b.value.isEmpty())
     }
 }

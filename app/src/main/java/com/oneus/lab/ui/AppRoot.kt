@@ -87,6 +87,10 @@ fun AppRoot() {
     fun go(i: Int) { current = i }
     fun home() { current = -1 }
 
+    // 状态槽整份 App 只造一份,并活过 AppRoot 的所有重组。
+// 它不随某一页的组合而生灭 —— 页面离开组合,它的槽还在,横跳回来参数还是原来那套。
+    val store = remember { SectionStore() }
+
     // 一节所处的全部环境,在这里**只构造一次**。
     // 以前 depth / tech / onGo / onHome 是几个平行参数分别往下穿,穿到 ScreenBody 就断了 ——
     // 「术语」开关就是这么变成死控件的:首页画了它,可没有任何一条参数路径能把它递进某一节。
@@ -96,6 +100,7 @@ fun AppRoot() {
         code = entries.getOrNull(current)?.index ?: "",
         depth = depth,
         tech = tech,
+        store = store,
         onDepth = { depthName = it.name },
         onTech = { tech = it },
         onGo = { go(it) },

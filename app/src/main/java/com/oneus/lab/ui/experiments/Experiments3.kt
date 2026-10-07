@@ -27,7 +27,7 @@ import kotlin.math.roundToInt
 @Composable
 fun Exp07_Precision(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("city") }
+    var scenarioId by env.state("scenarioId") { "city" }
     val sc = Scenarios.byId(scenarioId)
     val rows = remember(scenarioId) { LabEngine.precisionSweep(sc) }
     val conv = remember(scenarioId) { LabEngine.pppConvergence(sc) }
@@ -124,18 +124,18 @@ private val presets = listOf(
 @Composable
 fun Exp08_Sandbox(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("city") }
-    var clockNs by remember { mutableFloatStateOf(0f) }
-    var satClock by remember { mutableFloatStateOf(1f) }
-    var eph by remember { mutableFloatStateOf(1f) }
-    var relOn by remember { mutableStateOf(true) }
-    var tropoOn by remember { mutableStateOf(true) }
-    var mpOn by remember { mutableStateOf(false) }
-    var iono by remember { mutableStateOf(IonoHandling.TEC_MODEL) }
-    var freq by remember { mutableStateOf(FreqPlan.L1_L5) }
-    var systems by remember { mutableStateOf(GnssSystem.entries.toSet()) }
-    // 面板展开状态提升到这一层 —— LivePanel 只负责画,状态由页面持有,两边共享同一份
-    var panelOpen by remember { mutableStateOf(false) }
+    var scenarioId by env.state("scenarioId") { "city" }
+    var clockNs by env.state("clockNs") { 0f }
+    var satClock by env.state("satClock") { 1f }
+    var eph by env.state("eph") { 1f }
+    var relOn by env.state("relOn") { true }
+    var tropoOn by env.state("tropoOn") { true }
+    var mpOn by env.state("mpOn") { false }
+    var iono by env.state("iono") { IonoHandling.TEC_MODEL }
+    var freq by env.state("freq") { FreqPlan.L1_L5 }
+    var systems by env.state("systems") { GnssSystem.entries.toSet() }
+    // 面板展开状态放在这一层 —— LivePanel 只负责画,状态由页面持有,两边共享同一份
+    var panelOpen by env.state("panelOpen") { false }
 
     val sc = Scenarios.byId(scenarioId)
     val budget = remember(clockNs, satClock, eph, relOn, tropoOn, mpOn, iono, freq) {
@@ -389,16 +389,18 @@ private val challenges = listOf(
 @Composable
 fun Exp09_Challenge(env: SectionEnv) {
     val depth = env.depth
-    var idx by remember { mutableIntStateOf(0) }
+    var idx by env.state("idx") { 0 }
     val ch = challenges[idx]
-    var clockNs by remember(idx) { mutableFloatStateOf(0f) }
-    var satClock by remember(idx) { mutableFloatStateOf(1f) }
-    var eph by remember(idx) { mutableFloatStateOf(1f) }
-    var relOn by remember(idx) { mutableStateOf(true) }
-    var tropoOn by remember(idx) { mutableStateOf(true) }
-    var mpOn by remember(idx) { mutableStateOf(false) }
-    var iono by remember(idx) { mutableStateOf(IonoHandling.TEC_MODEL) }
-    var freq by remember(idx) { mutableStateOf(FreqPlan.L1_L5) }
+    // 键名里带上 idx —— 这是原来 `remember(idx)` 的语义:换关卡就得给一套新的默认值。
+    // 区别在于 idx 自己现在能跨节存活,所以从别的节跳回来时,当前关卡的参数原样还在。
+    var clockNs by env.state("knob/$idx/clockNs") { 0f }
+    var satClock by env.state("knob/$idx/satClock") { 1f }
+    var eph by env.state("knob/$idx/eph") { 1f }
+    var relOn by env.state("knob/$idx/relOn") { true }
+    var tropoOn by env.state("knob/$idx/tropoOn") { true }
+    var mpOn by env.state("knob/$idx/mpOn") { false }
+    var iono by env.state("knob/$idx/iono") { IonoHandling.TEC_MODEL }
+    var freq by env.state("knob/$idx/freq") { FreqPlan.L1_L5 }
 
     val sc = remember(idx) { Scenarios.byId(ch.scenarioId) }
     val scen = remember(idx) { if (ch.scenarioId == "city") sc.copy(tec = 4.0e17) else sc }
@@ -506,7 +508,7 @@ fun Exp09_Challenge(env: SectionEnv) {
 @Composable
 fun Closing(env: SectionEnv) {
     val depth = env.depth
-    var scenarioId by remember { mutableStateOf("city") }
+    var scenarioId by env.state("scenarioId") { "city" }
     val sc = Scenarios.byId(scenarioId)
     val lines = remember(scenarioId) { LabEngine.budgetBreakdown(sc) }
 

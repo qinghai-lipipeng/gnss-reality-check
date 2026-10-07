@@ -1,5 +1,7 @@
 package com.oneus.lab.ui.experiments
 
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.mutableStateOf
 import com.oneus.lab.ui.charts.Depth
 
 /**
@@ -25,6 +27,8 @@ data class SectionEnv(
     val depth: Depth,
     /** 术语开关:false = 人话,true = 专业术语 */
     val tech: Boolean,
+    /** 本节的状态槽。整份 App 一个实例,由 AppRoot 持有。 */
+    val store: SectionStore,
     val onDepth: (Depth) -> Unit,
     val onTech: (Boolean) -> Unit,
     val onGo: (Int) -> Unit,
@@ -48,4 +52,49 @@ data class SectionEnv(
 
     /** 术语开关的读法。[plain] 是人话,[formal] 是标准术语。 */
     fun term(plain: String, formal: String): String = if (tech) formal else plain
+
+    /**
+     * 本节的一个状态槽,自动按 `节号/键名` 隔离。
+     *
+     * 取代 `remember { mutableStateOf(...) }`。区别在**谁持有状态**:
+     * `remember` 把它交给组合 —— 而切节会把整页踢出组合,状态随之消失,
+     * 横跳一次自己刚调好的参数就全没了。槽归 [SectionStore] 持有,跟着**节**走。
+     *
+     * ```
+     * var scenarioId by env.state("scenario") { "open" }
+     * ```
+     *
+     * 键名相同就是同一个槽,`init` 只在第一次求值时跑一次。
+     * 需要"换个上下文就重置"时,把上下文拼进键名:`env.state("knob/$idx") { 0f }`。
+     */
+    fun <T> state(key: String, init: () -> T): MutableState<T> =
+        store.state("$code/$key", init)
+}
+
+/**
+ * 按「节号/键名」分槽的状态持有者。整份 App 一个实例。
+ *
+ * 以前 11 个实验页的 40 处状态全靠 `remember` 持有,而状态跟着组合走:
+ * `ScreenBody` 切节时旧页整个离开组合,`remember` 的槽随之销毁。
+ * 底栏存在的意义就是让用户横跳,横跳的代价却是丢掉自己刚做完的实验 ——
+ * 这才是"课程像散页"的技术根源。
+ *
+ * 纯 Kotlin,不碰 Compose 运行时,可以直接进单元测试。
+ */
+class SectionStore {
+    private val slots = HashMap<String, MutableState<*>>()
+
+    /**
+     * 取一个槽。同一 key 永远返回同一个 [MutableState],`init` 只跑第一次。
+     *
+     * 这里刻意**不用** `remember`:记忆已经是这个 map 本身了。
+     * 再套一层 `remember` 只会多一次重组的假象,还会让人以为状态又回到组合上了。
+     */
+    fun <T> state(key: String, init: () -> T): MutableState<T> {
+        @Suppress("UNCHECKED_CAST")
+        slots[key]?.let { return it as MutableState<T> }
+        val created = mutableStateOf(init())
+        slots[key] = created
+        return created
+    }
 }
